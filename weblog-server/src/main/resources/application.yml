@@ -1,0 +1,51 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /
+
+spring:
+  application:
+    name: weblog-server
+  # MySQL 8 数据源（本机），库已初始化：weblog（utf8mb4）
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/weblog?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: root
+    password: root
+  sql:
+    init:
+      # 建表与种子脚本均幂等（IF NOT EXISTS / INSERT IGNORE），重启不丢数据
+      mode: always
+      encoding: UTF-8
+      schema-locations: classpath:schema.sql
+      data-locations: classpath:data.sql
+
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      id-type: assign_id
+  mapper-locations: classpath*:mapper/*.xml
+
+weblog:
+  jwt:
+    secret: weblog-secret-key-yuhao-2024-this-is-a-demo-secret
+    expiration: 86400000   # 24h
+  upload:
+    # 文件上传本地目录（生产可切换为 Minio）
+    path: ./uploads
+    # 访问前缀（前端拼接）
+    url-prefix: /files
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+  api-docs:
+    path: /v3/api-docs

@@ -1,0 +1,20 @@
+# 生产环境配置（激活方式：--spring.profiles.active=prod）
+# 默认数据源切换为 MySQL，需自行创建数据库 weblog 并执行 schema.sql 中的建表语句
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/weblog?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: root
+    password: root
+  sql:
+    init:
+      mode: never   # 生产不自动执行脚本，由 DBA/运维处理
+
+weblog:
+  upload:
+    # 生产建议切换为 Minio，参考文档 9.2~9.4
+    path: /data/weblog/uploads
+
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.nologging.NoLoggingImpl
