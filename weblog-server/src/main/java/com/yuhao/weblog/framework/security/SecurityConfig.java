@@ -63,7 +63,7 @@ public class SecurityConfig {
                 .csrf().disable()
                 .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS).and()
                 .authorizeRequests()
-                    // 公开接口（前台 + 登录 + 文档）
+                    // 公开接口（前台 + 登录 + 文档 + 健康检查）
                     .antMatchers(
                             "/admin/login",
                             "/article/**",
@@ -77,6 +77,10 @@ public class SecurityConfig {
                             "/captcha/**",
                             "/files/**",
                             "/uploads/**",
+                            // 容器/负载均衡存活探测（compose healthcheck 与 nginx /health 依赖），
+                            // 仅放行 health 端点，避免 metrics/info 对外暴露
+                            "/actuator/health",
+                            "/actuator/health/**",
                             "/h2-console/**",
                             "/swagger-ui.html",
                             "/swagger-ui/**",
