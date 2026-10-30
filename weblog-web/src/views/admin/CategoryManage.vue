@@ -7,7 +7,7 @@
       </div>
     </template>
 
-    <el-table :data="tableData" v-loading="loading" border stripe>
+    <el-table v-loading="loading" :data="tableData" border stripe>
       <el-table-column prop="name" label="名称" width="200" />
       <el-table-column prop="articlesTotal" label="文章数" width="100" align="center" />
       <el-table-column prop="createTime" label="创建时间" />

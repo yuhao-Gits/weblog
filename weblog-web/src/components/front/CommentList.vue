@@ -17,8 +17,8 @@
         class="form-textarea"
       />
       <div class="form-actions">
-        <span class="reply-tip" v-if="replyTarget">回复 @{{ replyTarget.nickname }}</span>
-        <el-button size="small" v-if="replyTarget" @click="cancelReply">取消回复</el-button>
+        <span v-if="replyTarget" class="reply-tip">回复 @{{ replyTarget.nickname }}</span>
+        <el-button v-if="replyTarget" size="small" @click="cancelReply">取消回复</el-button>
         <el-button type="primary" size="small" :loading="submitting" @click="submit">发表评论</el-button>
       </div>
     </div>

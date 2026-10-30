@@ -1,0 +1,29 @@
+# ============================================================
+# Docker 构建上下文排除项（减小镜像构建体积）
+# ============================================================
+
+# Git
+.git
+.gitignore
+
+# IDE
+.idea
+.vscode
+*.iml
+
+# 前端依赖与构建产物
+weblog-web/node_modules
+weblog-web/dist
+weblog-web/.vite
+
+# 后端构建产物
+weblog-server/target
+
+# 运行时产物
+logs
+*.log
+uploads
+lucene-index
+
+# 环境敏感
+.env

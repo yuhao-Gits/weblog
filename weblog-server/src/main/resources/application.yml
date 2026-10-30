@@ -7,15 +7,16 @@ spring:
   application:
     name: weblog-server
   # MySQL 8 数据源（本机），库已初始化：weblog（utf8mb4）
+  # 敏感信息（用户名/密码）支持环境变量覆盖，默认值仅用于本地开发
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/weblog?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
-    username: root
-    password: root
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/weblog?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
+    username: ${SPRING_DATASOURCE_USERNAME:root}
+    password: ${SPRING_DATASOURCE_PASSWORD:root}
   sql:
     init:
       # 建表与种子脚本均幂等（IF NOT EXISTS / INSERT IGNORE），重启不丢数据
-      mode: always
+      mode: ${SPRING_SQL_INIT_MODE:always}
       encoding: UTF-8
       schema-locations: classpath:schema.sql
       data-locations: classpath:data.sql
@@ -36,11 +37,12 @@ mybatis-plus:
 
 weblog:
   jwt:
-    secret: weblog-secret-key-yuhao-2024-this-is-a-demo-secret
-    expiration: 86400000   # 24h
+    # 生产环境务必通过 WEBLOG_JWT_SECRET 注入强随机密钥（≥32 字节）
+    secret: ${WEBLOG_JWT_SECRET:weblog-secret-key-yuhao-2024-this-is-a-demo-secret}
+    expiration: ${WEBLOG_JWT_EXPIRATION:86400000}   # 24h
   upload:
     # 文件上传本地目录（生产可切换为 Minio）
-    path: ./uploads
+    path: ${WEBLOG_UPLOAD_PATH:./uploads}
     # 访问前缀（前端拼接）
     url-prefix: /files
 
@@ -49,3 +51,17 @@ springdoc:
     path: /swagger-ui.html
   api-docs:
     path: /v3/api-docs
+
+# 可观测性：Actuator 健康检查 / 指标 / 信息
+# 仅暴露只读端点，/actuator/health 供容器与负载均衡做存活探测
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+  info:
+    env:
+      enabled: true

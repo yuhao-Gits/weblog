@@ -1,7 +1,7 @@
 <template>
   <el-card shadow="never">
     <template #header><span>博客设置</span></template>
-    <el-form :model="form" label-width="100px" v-loading="loading" style="max-width: 600px">
+    <el-form v-loading="loading" :model="form" label-width="100px" style="max-width: 600px">
       <el-form-item label="博客名称">
         <el-input v-model="form.blogName" />
       </el-form-item>

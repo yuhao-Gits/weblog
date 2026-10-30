@@ -1,0 +1,77 @@
+# ============================================================
+# Weblog 一键部署编排（docker compose up -d）
+# 前置：无（会自动构建镜像、初始化 MySQL）
+# 说明：敏感信息通过环境变量注入，生产环境请替换占位符并配合 .env 文件
+# ============================================================
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: weblog-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_DATABASE: weblog
+      TZ: Asia/Shanghai
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-authentication-plugin=mysql_native_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_ROOT_PASSWORD:-root}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  backend:
+    build:
+      context: .
+      dockerfile: deploy/backend.Dockerfile
+    container_name: weblog-backend
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      # 数据源（通过环境变量覆盖 application.yml 中的默认值）
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/weblog?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      # JWT 密钥（生产务必替换为强随机值）
+      WEBLOG_JWT_SECRET: ${WEBLOG_JWT_SECRET:-please-change-this-jwt-secret-in-production}
+      WEBLOG_UPLOAD_PATH: /app/uploads
+      # 数据库初始化脚本开关（首次启动建表）
+      SPRING_SQL_INIT_MODE: always
+      TZ: Asia/Shanghai
+    ports:
+      - "8080:8080"
+    volumes:
+      - upload-data:/app/uploads
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:8080/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: deploy/frontend.Dockerfile
+    container_name: weblog-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "80:80"
+
+volumes:
+  mysql-data:
+  upload-data:

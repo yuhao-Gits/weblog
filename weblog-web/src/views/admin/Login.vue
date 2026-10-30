@@ -11,7 +11,7 @@
       <h1 class="login-title">Weblog</h1>
       <p class="login-subtitle">欢迎回来，请登录你的账号</p>
 
-      <el-form :model="form" :rules="rules" ref="formRef" @submit.prevent="handleLogin" size="large" class="login-form">
+      <el-form ref="formRef" :model="form" :rules="rules" size="large" class="login-form" @submit.prevent="handleLogin">
         <el-form-item prop="username">
           <el-input v-model="form.username" placeholder="用户名" :prefix-icon="User" />
         </el-form-item>

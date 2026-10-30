@@ -24,9 +24,10 @@
 
 | 端 | 技术 |
 |----|------|
-| 后端 | Spring Boot 2.7.18 · MyBatis-Plus 3.5.5 · Spring Security · JWT · MySQL 8 · Lucene 8.11 · WebSocket |
+| 后端 | Spring Boot 2.7.18 · MyBatis-Plus 3.5.5 · Spring Security · JWT · MySQL 8 · Lucene 8.11 · WebSocket · Actuator |
 | 前端 | Vue 3 · Vite 5 · Element Plus · Pinia · Tailwind CSS · ECharts · md-editor-v3 |
-| 部署 | Docker · Nginx · Jenkins CI/CD |
+| 质量保障 | JUnit 5 · Mockito（后端单测）· ESLint · Prettier · EditorConfig（前端规范） |
+| 部署 | Docker · Nginx · docker-compose |
 
 ## 📂 项目结构
 
@@ -47,6 +48,7 @@ weblog/
 │       ├── stores/         # Pinia 状态
 │       └── router/         # 路由
 ├── docs/                   # 项目文档
+├── deploy/                 # 部署配置（Dockerfile / docker-compose / nginx）
 ├── test-1.0.py             # 回归测试脚本（46 项）
 └── *.sh / *.bat            # 启动/构建脚本
 ```
@@ -104,8 +106,56 @@ start-frontend.bat
 ## 🧪 测试
 
 ```bash
-python test-1.0.py   # 全量接口回归测试（46 项）
+# 后端单元测试（JUnit 5 + Mockito，14 项）
+cd weblog-server && mvn test
+
+# 前端代码规范检查 / 自动修复 / 格式化
+cd weblog-web && npm run lint
+cd weblog-web && npm run lint:fix
+cd weblog-web && npm run format
+
+# 全量接口回归测试（46 项）
+python test-1.0.py
 ```
+
+## 🐳 Docker 部署
+
+```bash
+# 1. 配置环境变量（复制模板后修改密码与 JWT 密钥）
+cp deploy/.env.example .env
+
+# 2. 一键启动（自动构建镜像 + 初始化 MySQL + 编排三个服务）
+docker compose -f deploy/docker-compose.yml up -d
+
+# 3. 访问
+#   前端  http://localhost
+#   后端  http://localhost:8080
+#   健康检查 http://localhost:8080/actuator/health
+```
+
+## 🔄 CI/CD
+
+项目内置 GitHub Actions 流水线（`.github/workflows/ci.yml`），push 到 `main` 或提交 PR 时自动执行：
+
+1. **后端**：JDK 8 编译 + 单元测试
+2. **前端**：依赖安装 + ESLint 检查 + 构建
+3. **Docker**：后端/前端镜像构建验证
+
+> 使用前需在 GitHub 仓库 Settings → Actions 中确认 Workflow 已启用。
+
+## 🔐 配置外部化
+
+敏感配置均支持环境变量注入（默认值仅供本地开发），生产环境**务必**通过环境变量覆盖：
+
+| 环境变量 | 说明 | 默认值 |
+|---------|------|--------|
+| `SPRING_DATASOURCE_URL` | 数据库连接串 | 本机 MySQL |
+| `SPRING_DATASOURCE_USERNAME` | 数据库用户名 | root |
+| `SPRING_DATASOURCE_PASSWORD` | 数据库密码 | root |
+| `WEBLOG_JWT_SECRET` | JWT 签名密钥（≥32 字节强随机值） | 演示值 |
+| `WEBLOG_UPLOAD_PATH` | 上传文件目录 | ./uploads |
+
+> 生成强随机 JWT 密钥：`openssl rand -base64 48`
 
 ## 📄 许可证
 

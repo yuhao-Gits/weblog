@@ -7,7 +7,7 @@
       </div>
     </template>
 
-    <el-form :model="form" label-width="80px" v-loading="loading">
+    <el-form v-loading="loading" :model="form" label-width="80px">
       <el-form-item label="标题">
         <el-input v-model="form.title" placeholder="请输入文章标题" />
       </el-form-item>

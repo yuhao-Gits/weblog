@@ -53,7 +53,7 @@
           </el-form-item>
         </el-form>
 
-        <el-table :data="articleList" v-loading="loading" border stripe>
+        <el-table v-loading="loading" :data="articleList" border stripe>
           <el-table-column prop="title" label="标题" min-width="220" show-overflow-tooltip />
           <el-table-column prop="summary" label="摘要" min-width="200" show-overflow-tooltip />
           <el-table-column label="置顶" width="70" align="center">
@@ -169,7 +169,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import {
   listDirectory, saveDirectory, deleteDirectory,
   pageArticle, saveArticle, deleteArticle,
-  updateArticleTop, updateArticleStatus, getArticleDetail
+  updateArticleTop, updateArticleStatus
 } from '@/api/knowledge'
 import { ElMessage } from 'element-plus'
 

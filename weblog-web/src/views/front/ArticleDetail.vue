@@ -17,7 +17,7 @@
               </span>
             </div>
 
-            <div class="article-content" v-highlight v-viewer v-html="article.contentHtml"></div>
+            <div v-highlight v-viewer class="article-content" v-html="article.contentHtml"></div>
 
             <div class="article-footer">
               <el-button round plain @click="$router.back()">

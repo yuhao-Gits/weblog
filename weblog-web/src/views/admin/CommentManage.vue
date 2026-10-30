@@ -17,7 +17,7 @@
       </el-form-item>
     </el-form>
 
-    <el-table :data="tableData" v-loading="loading" border stripe>
+    <el-table v-loading="loading" :data="tableData" border stripe>
       <el-table-column type="index" label="#" width="50" />
       <el-table-column label="评论人" width="160">
         <template #default="{ row }">

@@ -36,7 +36,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { reactive, onMounted } from 'vue'
 import request from '@/utils/request'
 import { useBlogSettings } from '@/composables/useBlogSettings'
 

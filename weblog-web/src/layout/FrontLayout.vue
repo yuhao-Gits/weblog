@@ -19,10 +19,10 @@
           <router-link to="/knowledge" class="nav-link">知识库</router-link>
           <router-link to="/chat" class="nav-link">聊天室</router-link>
 
-          <button class="icon-btn" @click="searchDialogRef?.open()" title="搜索">
+          <button class="icon-btn" title="搜索" @click="searchDialogRef?.open()">
             <el-icon><Search /></el-icon>
           </button>
-          <button class="icon-btn" @click="toggleTheme" :title="isDark ? '切换到白天' : '切换到黑夜'">
+          <button class="icon-btn" :title="isDark ? '切换到白天' : '切换到黑夜'" @click="toggleTheme">
             <el-icon><Sunny v-if="isDark" /><Moon v-else /></el-icon>
           </button>
 

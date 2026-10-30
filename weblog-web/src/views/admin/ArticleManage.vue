@@ -25,7 +25,7 @@
     </el-form>
 
     <!-- 表格 -->
-    <el-table :data="tableData" v-loading="loading" border stripe>
+    <el-table v-loading="loading" :data="tableData" border stripe>
       <el-table-column type="index" label="#" width="50" />
       <el-table-column prop="title" label="标题" min-width="200" show-overflow-tooltip />
       <el-table-column prop="categoryName" label="分类" width="120" />
