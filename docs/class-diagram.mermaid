@@ -1,0 +1,55 @@
+classDiagram
+    %% ============================================================
+    %% Weblog 后端文件存储抽象层（本次改造新增/修改的类）
+    %% 目标：本地存储(开发) 与 Minio(生产) 可配置切换，Controller 层无感知
+    %% ============================================================
+
+    class FileStorage {
+        <<interface>>
+        +String store(MultipartFile file)
+        +void delete(String objectName)
+        +String buildUrl(String objectName)
+    }
+
+    class LocalFileStorage {
+        -String uploadPath
+        -String urlPrefix
+        +String store(MultipartFile file)
+        +void delete(String objectName)
+        +String buildUrl(String objectName)
+    }
+
+    class MinioFileStorage {
+        -MinioClient minioClient
+        -String bucket
+        -String urlPrefix
+        +String store(MultipartFile file)
+        +void delete(String objectName)
+        +String buildUrl(String objectName)
+    }
+
+    class MinioConfig {
+        +MinioClient minioClient()
+    }
+
+    class FileService {
+        <<interface>>
+        +Result upload(MultipartFile file)
+    }
+
+    class FileServiceImpl {
+        -FileStorage fileStorage
+        +Result upload(MultipartFile file)
+    }
+
+    class AdminFileController {
+        -FileService fileService
+        +Result upload(MultipartFile file)
+    }
+
+    FileStorage <|.. LocalFileStorage : 实现（storage.type=local）
+    FileStorage <|.. MinioFileStorage : 实现（storage.type=minio）
+    FileServiceImpl ..|> FileService : 实现
+    FileServiceImpl --> FileStorage : 委托
+    AdminFileController --> FileService : 依赖
+    MinioFileStorage --> MinioConfig : 使用 MinioClient Bean

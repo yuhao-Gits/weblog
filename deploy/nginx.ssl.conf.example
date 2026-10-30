@@ -1,0 +1,98 @@
+# ============================================================
+# Weblog HTTPS（443）预留模板
+# 说明：
+#   - 当前团队决策「暂用 IP 直连、HTTPS 跳过」，故本文件不参与部署。
+#   - 待域名备案 + 证书（certbot / 腾讯云 SSL）就绪后，复制为
+#     nginx.conf 的补充 server 块，或替换主配置启用 443。
+#   - 证书/私钥通过 volume 挂载进 frontend 容器（路径按实际调整）。
+# ============================================================
+
+# HTTP 80 -> HTTPS 443 跳转
+server {
+    listen       80;
+    server_name  your-domain.com;
+
+    # 强制跳转 HTTPS（保留路径与查询串）
+    return 301 https://$host$request_uri;
+}
+
+# HTTPS 主服务
+server {
+    listen       443 ssl http2;
+    server_name  your-domain.com;
+
+    # ---------- 证书配置（按实际挂载路径替换） ----------
+    ssl_certificate     /etc/nginx/ssl/fullchain.pem;
+    ssl_certificate_key /etc/nginx/ssl/privkey.pem;
+
+    # ---------- 现代 TLS 安全基线 ----------
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_ciphers         HIGH:!aNULL:!MD5;
+    ssl_prefer_server_ciphers on;
+    ssl_session_cache   shared:SSL:10m;
+    ssl_session_timeout 10m;
+
+    # 前端静态资源根目录
+    root   /usr/share/nginx/html;
+    index  index.html;
+
+    client_max_body_size 12m;
+
+    gzip on;
+    gzip_min_length 1k;
+    gzip_comp_level 5;
+    gzip_types text/plain text/css application/json application/javascript
+               application/xml image/svg+xml font/ttf font/otf;
+
+    location ~* \.(js|css|png|jpg|jpeg|gif|svg|ico|woff2?|ttf)$ {
+        expires 30d;
+        add_header Cache-Control "public, immutable";
+        try_files $uri =404;
+    }
+
+    # WebSocket 聊天室
+    location /api/chat/ws {
+        proxy_pass http://backend:8080/chat/ws;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_read_timeout 3600s;
+    }
+
+    # REST API（去前缀）
+    location /api/ {
+        proxy_pass http://backend:8080/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+
+    # 文件对象（直连 Minio）
+    location /files/ {
+        proxy_pass http://minio:9000/weblog/;
+        proxy_set_header Host $host;
+        expires 7d;
+    }
+
+    # Minio Console（best-effort）
+    location /minio/ {
+        proxy_pass http://minio:9001/;
+        proxy_set_header Host $host;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+
+    # 后端健康检查
+    location = /health {
+        proxy_pass http://backend:8080/actuator/health;
+    }
+
+    # 前端 history 路由回退
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}

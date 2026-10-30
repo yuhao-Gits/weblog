@@ -1,0 +1,41 @@
+sequenceDiagram
+    autonumber
+    participant U as 用户/浏览器
+    participant N as Nginx(frontend容器:80)
+    participant B as Backend(weblog-server:8080)
+    participant M as MySQL(weblog-mysql:3306)
+    participant Min as Minio(weblog-minio:9000)
+    participant J as Jenkins(同机)
+    participant TCR as 腾讯云 TCR
+    participant S as 目标服务器 62.234.30.116
+
+    Note over U,S: ① 首次启动：docker compose up -d
+    M->>M: 初始化 weblog 库(utf8mb4)
+    Min->>Min: minio-init 创建 bucket=weblog + 匿名下载策略
+    B->>M: 连接并执行 schema.sql/data.sql(幂等建表+种子)
+    B->>B: InitDataRunner 初始化默认账号 admin/123456
+    B->>B: LuceneIndexRunner 从 MySQL 全量重建站内搜索索引
+
+    Note over U,Min: ② 后台上传图片（走 Minio 存储）
+    U->>N: POST /api/admin/file/upload (multipart)
+    N->>B: 反代 /api -> backend:8080（去掉 /api 前缀）
+    B->>B: AdminFileController.upload -> FileServiceImpl.upload
+    B->>B: 路由到 MinioFileStorage.store()
+    B->>Min: putObject(bucket=weblog, object=uuid.ext)
+    Min-->>B: 上传成功
+    B-->>U: {code:"10000", data:{url:"/files/uuid.ext"}}
+
+    Note over U,Min: ③ 图片访问（/files 直连 Minio，不经过后端）
+    U->>N: GET /files/uuid.ext
+    N->>Min: 反代 /files -> minio:9000/weblog/
+    Min-->>U: 图片字节流(匿名可读)
+
+    Note over J,S: ④ 代码推送触发 Jenkins CI/CD 流水线
+    J->>J: Checkout + 后端 mvn test + 前端 npm lint/build
+    J->>J: docker build 后端/前端镜像 (weblog-server / weblog-web)
+    J->>TCR: docker login + push weblog-server:build-N、weblog-web:build-N
+    J->>S: SSH 执行 deploy.sh（携带 IMAGE_TAG=build-N）
+    S->>TCR: docker compose pull backend frontend
+    S->>S: docker compose up -d（滚动重建变化的容器）
+    S->>S: smoke-test.sh 健康检查(/health、首页、/api、/files、WS)
+    S-->>J: 部署结果（成功/失败，失败触发 rollback.sh 回滚上一版本）

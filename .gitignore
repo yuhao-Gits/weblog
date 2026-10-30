@@ -36,5 +36,9 @@ application-local.yml
 .env
 .env.local
 
+# ===== 部署运行时产物 =====
+deploy/backups/
+deploy/scripts/.last-good-tag
+
 # ===== 编辑器/工具工作区数据 =====
 .workbuddy/

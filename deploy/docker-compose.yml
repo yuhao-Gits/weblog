@@ -1,10 +1,25 @@
 # ============================================================
-# Weblog 一键部署编排（docker compose up -d）
-# 前置：无（会自动构建镜像、初始化 MySQL）
-# 说明：敏感信息通过环境变量注入，生产环境请替换占位符并配合 .env 文件
+# Weblog 生产环境一键编排（docker compose up -d）
+# 服务拓扑：
+#   - mysql       : MySQL 8（仅内网，不对外映射 3306）
+#   - minio       : 对象存储（文件/图床，仅内网；Console 映射 9001）
+#   - minio-init  : 一次性任务（建桶 + 匿名下载策略，完成后退出）
+#   - backend     : Spring Boot 后端（多阶段构建，Java 8）
+#   - frontend    : Nginx 网关 + Vue 静态资源（对外 80）
+#   - jenkins     : CI/CD 基座（挂载宿主 docker.sock，对外 8080）
+# 说明：
+#   1) 敏感信息通过 .env 注入，禁止硬编码到本文件。
+#   2) build.context 使用 ".."（相对本文件目录 deploy/，即仓库根），
+#      dockerfile 路径相对 build context，因此写作 deploy/xxx.Dockerfile。
+#   3) 首次本地构建：docker compose up -d --build
+#      CI 发布：     IMAGE_TAG=build-N docker compose pull backend frontend
+#                    IMAGE_TAG=build-N docker compose up -d --no-build backend frontend
 # ============================================================
 
 services:
+  # ----------------------------------------------------------
+  # MySQL 8：业务数据库（utf8mb4）
+  # ----------------------------------------------------------
   mysql:
     image: mysql:8.0
     container_name: weblog-mysql
@@ -17,10 +32,18 @@ services:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
       - --default-authentication-plugin=mysql_native_password
-    ports:
-      - "3306:3306"
+      # 2C4G 内存受限：压 buffer pool 并关闭 performance_schema，控制在 512m 内
+      - --innodb-buffer-pool-size=128M
+      - --performance-schema=OFF
+    # 生产不对外暴露 3306，仅 compose 内网访问；本地排查可临时取消注释
+    # ports:
+    #   - "3306:3306"
     volumes:
       - mysql-data:/var/lib/mysql
+    networks:
+      - weblog-net
+    mem_limit: 512m
+    cpus: 0.5
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_ROOT_PASSWORD:-root}"]
       interval: 10s
@@ -28,41 +51,124 @@ services:
       retries: 10
       start_period: 30s
 
+  # ----------------------------------------------------------
+  # Minio：对象存储（图片/封面/附件）
+  # 数据卷持久化，仅内网 9000；Console 9001 映射到宿主机便于后台管理
+  # ----------------------------------------------------------
+  minio:
+    image: minio/minio:latest # 生产建议锁定具体 RELEASE 版本（如 RELEASE.2024-xx-xx）
+    container_name: weblog-minio
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      TZ: Asia/Shanghai
+    command: server /data --console-address ":9001"
+    # 9000 不对外（Nginx 内网反代 /files）；9001 控制台按需对外
+    ports:
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+    networks:
+      - weblog-net
+    mem_limit: 512m
+    cpus: 0.5
+    # 说明：minio/minio 镜像为精简静态镜像，内置无 curl/sh 的 healthcheck 不可靠；
+    # 就绪探测交由下方 minio-init 通过 `mc ls` 重试实现。
+
+  # ----------------------------------------------------------
+  # minio-init：一次性任务（等待就绪 → 建桶 → 匿名下载策略）
+  # 完成即退出（restart: "no"），backend 依赖其成功完成
+  # ----------------------------------------------------------
+  minio-init:
+    image: minio/mc:latest
+    container_name: weblog-minio-init
+    restart: "no"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        echo ">> 配置 Minio 别名 local -> http://minio:9000"
+        mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}"
+        # 等待 Minio 服务真正就绪（alias set 仅本地保存，不校验连通性）
+        until mc ls local >/dev/null 2>&1; do
+          echo ">> 等待 Minio 就绪..."
+          sleep 2
+        done
+        echo ">> 创建桶（幂等）：$${MINIO_BUCKET}"
+        mc mb --ignore-existing "local/$${MINIO_BUCKET}"
+        echo ">> 设置匿名只读下载策略（供 Nginx /files 直连访问）"
+        mc anonymous set download "local/$${MINIO_BUCKET}"
+        echo ">> Minio 初始化完成：bucket=$${MINIO_BUCKET}"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_BUCKET: ${MINIO_BUCKET:-weblog}
+    depends_on:
+      minio:
+        condition: service_started
+    networks:
+      - weblog-net
+
+  # ----------------------------------------------------------
+  # backend：Spring Boot 后端（多阶段构建，Java 8，Xmx512m）
+  # 依赖：MySQL 健康 + minio-init 成功（保证桶已存在）
+  # ----------------------------------------------------------
   backend:
+    image: ${IMAGE_REGISTRY:-ccr.ccs.tencentcloud.com}/${IMAGE_NAMESPACE:-weblog}/weblog-server:${IMAGE_TAG:-latest}
     build:
-      context: .
+      context: ..
       dockerfile: deploy/backend.Dockerfile
     container_name: weblog-backend
     restart: unless-stopped
     depends_on:
       mysql:
         condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
     environment:
-      # 数据源（通过环境变量覆盖 application.yml 中的默认值）
+      # 激活生产配置（数据源 MySQL + storage.type=minio）
+      SPRING_PROFILES_ACTIVE: prod
+      # 数据源（走 compose 内网服务名 mysql）
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/weblog?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      # 幂等建表/种子脚本（IF NOT EXISTS / INSERT IGNORE，重启不丢数据）
+      SPRING_SQL_INIT_MODE: always
       # JWT 密钥（生产务必替换为强随机值）
       WEBLOG_JWT_SECRET: ${WEBLOG_JWT_SECRET:-please-change-this-jwt-secret-in-production}
+      # 存储切换（minio / local）
+      WEBLOG_STORAGE_TYPE: ${WEBLOG_STORAGE_TYPE:-minio}
       WEBLOG_UPLOAD_PATH: /app/uploads
-      # 数据库初始化脚本开关（首次启动建表）
-      SPRING_SQL_INIT_MODE: always
+      # Minio 连接（与 minio 服务一致）
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_BUCKET: ${MINIO_BUCKET:-weblog}
+      # JVM 内存（2C4G 内存受限，锁定堆上限）
+      JAVA_OPTS: "-Xms256m -Xmx512m"
       TZ: Asia/Shanghai
-    ports:
-      - "8080:8080"
     volumes:
-      - upload-data:/app/uploads
+      - upload-data:/app/uploads   # 仅 storage.type=local 时使用，作为兜底
       - ./logs:/app/logs
+    networks:
+      - weblog-net
+    mem_limit: 768m
+    cpus: 1.0
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:8080/actuator/health"]
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/actuator/health"]
       interval: 15s
       timeout: 5s
       retries: 10
       start_period: 40s
 
+  # ----------------------------------------------------------
+  # frontend：Nginx 网关 + Vue 静态资源（对外 80）
+  # ----------------------------------------------------------
   frontend:
+    image: ${IMAGE_REGISTRY:-ccr.ccs.tencentcloud.com}/${IMAGE_NAMESPACE:-weblog}/weblog-web:${IMAGE_TAG:-latest}
     build:
-      context: .
+      context: ..
       dockerfile: deploy/frontend.Dockerfile
     container_name: weblog-frontend
     restart: unless-stopped
@@ -71,7 +177,52 @@ services:
         condition: service_healthy
     ports:
       - "80:80"
+    networks:
+      - weblog-net
+    mem_limit: 64m
+    cpus: 0.25
 
+  # ----------------------------------------------------------
+  # jenkins：CI/CD 基座（同机部署，复用宿主 Docker daemon）
+  # ----------------------------------------------------------
+  jenkins:
+    build:
+      context: ..
+      dockerfile: deploy/jenkins.Dockerfile
+      args:
+        # 与宿主 docker.sock 的 group gid 对齐（Ubuntu 常见 999/998，可用 getent group docker 查询）
+        DOCKER_GID: ${DOCKER_GID:-999}
+    container_name: weblog-jenkins
+    restart: unless-stopped
+    environment:
+      JAVA_OPTS: "-Xmx768m"
+      TZ: Asia/Shanghai
+    ports:
+      - "${JENKINS_PORT:-8080}:8080"
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      # 复用宿主 Docker daemon（免 DinD，节省内存）；需宿主已安装 Docker。
+      # 说明：CI 的测试/构建步骤采用 `docker build`（上下文由 docker CLI 流式传输），
+      # 因此不依赖 workspace 在宿主的可解析路径，无需将 jenkins_home 绑定为宿主目录。
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - weblog-net
+    mem_limit: 1024m
+    cpus: 1.0
+
+# ------------------------------------------------------------
+# 数据卷
+# ------------------------------------------------------------
 volumes:
   mysql-data:
+  minio-data:
   upload-data:
+  jenkins_home:
+
+# ------------------------------------------------------------
+# 统一内网（显式命名，便于脚本/临时容器直接引用）
+# ------------------------------------------------------------
+networks:
+  weblog-net:
+    name: weblog-net
+    driver: bridge

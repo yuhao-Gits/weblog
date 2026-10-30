@@ -1,0 +1,35 @@
+# ============================================================
+# Docker 构建上下文排除项（deploy/ 目录版本）
+# 说明：
+#   - docker-compose.yml 中 build.context 为 ".."（仓库根），
+#     因此实际生效的是仓库根的 .dockerignore，本文件为「以 deploy/ 为
+#     构建上下文时」的参考副本，两处内容保持一致。
+#   - 目标：排除依赖/产物/运行时/敏感文件，减小镜像构建体积与泄露面。
+# ============================================================
+
+# Git
+.git
+.gitignore
+
+# IDE
+.idea
+.vscode
+*.iml
+
+# 前端依赖与构建产物
+weblog-web/node_modules
+weblog-web/dist
+weblog-web/.vite
+
+# 后端构建产物
+weblog-server/target
+
+# 运行时产物
+logs
+*.log
+uploads
+lucene-index
+
+# 环境敏感
+.env
+.env.local

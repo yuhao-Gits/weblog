@@ -40,10 +40,19 @@ weblog:
     # 生产环境务必通过 WEBLOG_JWT_SECRET 注入强随机密钥（≥32 字节）
     secret: ${WEBLOG_JWT_SECRET:weblog-secret-key-yuhao-2024-this-is-a-demo-secret}
     expiration: ${WEBLOG_JWT_EXPIRATION:86400000}   # 24h
+  # 文件存储切换：local（本地磁盘，开发默认）| minio（对象存储，生产）
+  storage:
+    type: ${WEBLOG_STORAGE_TYPE:local}
+  # Minio 连接（仅 storage.type=minio 时生效）
+  minio:
+    endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+    access-key: ${MINIO_ACCESS_KEY:minioadmin}
+    secret-key: ${MINIO_SECRET_KEY:minioadmin}
+    bucket: ${MINIO_BUCKET:weblog}
   upload:
-    # 文件上传本地目录（生产可切换为 Minio）
+    # 文件上传本地目录（storage.type=local 时使用；生产走 Minio）
     path: ${WEBLOG_UPLOAD_PATH:./uploads}
-    # 访问前缀（前端拼接）
+    # 访问前缀（前端拼接，本地/Minio 统一保持 /files）
     url-prefix: /files
 
 springdoc:

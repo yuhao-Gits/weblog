@@ -104,6 +104,13 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- Minio 对象存储 SDK（8.5.7 兼容 Java 8，生产图床，勿升级到要求 JDK11+ 的高版本） -->
+        <dependency>
+            <groupId>io.minio</groupId>
+            <artifactId>minio</artifactId>
+            <version>8.5.7</version>
+        </dependency>
+
         <!-- API 文档 -->
         <dependency>
             <groupId>org.springdoc</groupId>

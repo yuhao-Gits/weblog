@@ -27,3 +27,4 @@ lucene-index
 
 # 环境敏感
 .env
+.env.local
