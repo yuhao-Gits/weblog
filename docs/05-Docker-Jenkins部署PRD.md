@@ -1,5 +1,7 @@
 # Weblog Docker 化 + Jenkins CI/CD 改造 PRD（简单版）
 
+> 📌 **落地状态**：本 PRD 已由团队完成实现（架构见 [system_design.md](system_design.md)），并已部署上线。核心 Docker 编排（MySQL/Minio/后端/前端）已运行；Jenkins CI/CD 流水线代码已就绪但需配置凭据后启用。部署实操见 [《部署与维护手册（小白版）》](06-部署与维护手册.md)。
+
 ## 1. 项目信息
 
 - **Language**：中文

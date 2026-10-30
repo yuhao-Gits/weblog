@@ -101,7 +101,10 @@ start-frontend.bat
 | [需求文档](docs/01-需求文档.md) | 功能需求清单与角色权限 |
 | [设计文档](docs/02-设计文档.md) | 系统架构、数据库设计、关键技术方案 |
 | [开发文档](docs/03-开发文档.md) | 环境搭建、开发规范、接口清单 |
-| [运维部署文档](docs/04-运维部署文档.md) | 生产部署、Docker、CI/CD |
+| [运维部署文档](docs/04-运维部署文档.md) | 传统方式部署（单容器 + 手动 Nginx，参考） |
+| [**部署与维护手册（小白版）**](docs/06-部署与维护手册.md) | **⭐ 推荐：从零部署 + 日常维护，手把手教程** |
+| [Docker+Jenkins 部署 PRD](docs/05-Docker-Jenkins部署PRD.md) | Docker 化 + CI/CD 改造需求与方案 |
+| [系统设计文档](docs/system_design.md) | Docker 编排架构设计与任务分解 |
 
 ## 🧪 测试
 
@@ -120,18 +123,28 @@ python test-1.0.py
 
 ## 🐳 Docker 部署
 
-```bash
-# 1. 配置环境变量（复制模板后修改密码与 JWT 密钥）
-cp deploy/.env.example .env
+> **新手请直接看 [部署与维护手册（小白版）](docs/06-部署与维护手册.md)**，那里有从零开始的完整手把手教程。
+>
+> 下面只给出最简命令，供有经验的用户快速上手。
 
-# 2. 一键启动（自动构建镜像 + 初始化 MySQL + 编排三个服务）
-docker compose -f deploy/docker-compose.yml up -d
+整套系统由 4 个容器组成（MySQL + Minio + 后端 + 前端），用 docker-compose 一键编排：
+
+```bash
+# 1. 配置环境变量（复制模板后务必修改密码与 JWT 密钥）
+cd deploy
+cp .env.example .env
+# 编辑 .env，至少修改 MYSQL_ROOT_PASSWORD / MINIO_ROOT_PASSWORD / WEBLOG_JWT_SECRET
+
+# 2. 一键启动（自动构建镜像 + 初始化 MySQL + 建 Minio 桶）
+docker compose up -d --build
 
 # 3. 访问
-#   前端  http://localhost
-#   后端  http://localhost:8080
-#   健康检查 http://localhost:8080/actuator/health
+#   前端         http://localhost
+#   健康检查     http://localhost:8080/actuator/health
+#   Minio 控制台 http://localhost:9001
 ```
+
+> 注意：国内服务器拉取 `minio/minio` 镜像可能失败（官方已从 Docker Hub 下架），详见手册「7.1 Minio 镜像拉取失败」的解决办法。
 
 ## 🔄 CI/CD
 
